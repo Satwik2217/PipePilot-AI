@@ -39,13 +39,23 @@ npm run dev
 
 ## Environment
 
-Create a `.env.local` file at the project root and add:
+Create a `.env.local` file at the project root and add one or more of the provider credentials below:
 
 ```bash
 OPENAI_API_KEY=your_openai_api_key_here
+COHERE_API_KEY=your_cohere_api_key_here
+AI_PROVIDER=openai
 ```
 
-If `OPENAI_API_KEY` is missing, the receptionist route falls back to a local prompt sequence, so the demo remains functional without OpenAI credentials.
+- `OPENAI_API_KEY` enables the OpenAI provider
+- `COHERE_API_KEY` enables the Cohere provider
+- `AI_PROVIDER` can be set to `openai` or `cohere`
+
+If both providers are configured, OpenAI is used by default. If OpenAI returns an insufficient quota error and `COHERE_API_KEY` is available, the route will automatically retry with Cohere.
+
+Cohere offers a free tier and can be a more generous alternative for development and early testing.
+
+If no API key is configured, the receptionist route falls back to a local prompt sequence so the demo remains functional.
 
 ## Testing Module 2
 
