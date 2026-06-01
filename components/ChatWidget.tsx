@@ -1,10 +1,18 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 import AIReceptionist from "./AIReceptionist";
 
+const hiddenPrefixes = ["/dashboard", "/auth"];
+
 export default function ChatWidget() {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
+
+  if (hiddenPrefixes.some((prefix) => pathname.startsWith(prefix))) {
+    return null;
+  }
 
   return (
     <div className="fixed bottom-6 right-6 z-50">

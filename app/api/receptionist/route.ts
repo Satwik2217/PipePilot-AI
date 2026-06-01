@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-
-type ChatMessage = { role: string; content: string };
+import { trySaveLead } from "../../../lib/leads/save-lead";
+import type { ChatMessage } from "../../../lib/types/lead";
 
 const systemPrompt = `You are an AI receptionist for a plumbing company.
 Your job is to collect customer information.
@@ -29,10 +29,17 @@ function getFallbackReply(messages: ChatMessage[]) {
   return fallbackPrompts[Math.min(userCount, fallbackPrompts.length - 1)];
 }
 
-function formatOpenAIError(errorBody: any, errorText: string) {
+type OpenAIErrorBody = {
+  error?: {
+    message?: string;
+    code?: string;
+  };
+};
+
+function formatOpenAIError(errorBody: OpenAIErrorBody | null, errorText: string) {
   const message = errorBody?.error?.message ?? errorText;
-  const err = new Error(message);
-  (err as any).code = errorBody?.error?.code;
+  const err = new Error(message) as Error & { code?: string };
+  err.code = errorBody?.error?.code;
   return err;
 }
 
@@ -53,7 +60,7 @@ async function createOpenAIReply(messages: ChatMessage[], apiKey: string) {
 
   if (!response.ok) {
     const errorText = await response.text();
-    let errorBody: any = null;
+    let errorBody: OpenAIErrorBody | null = null;
     try {
       errorBody = JSON.parse(errorText);
     } catch {
@@ -97,8 +104,8 @@ async function createCohereReply(messages: ChatMessage[], apiKey: string) {
   }
 
   const reply = content
-    .filter((item: any) => item?.type === "text" && typeof item.text === "string")
-    .map((item: any) => item.text)
+    .filter((item: { type?: string; text?: string }) => item?.type === "text" && typeof item.text === "string")
+    .map((item: { text: string }) => item.text)
     .join("");
 
   if (!reply.trim()) {
@@ -108,17 +115,39 @@ async function createCohereReply(messages: ChatMessage[], apiKey: string) {
   return reply;
 }
 
+type ReceptionistRequestBody = {
+  messages: ChatMessage[];
+  sessionId?: string;
+};
+
+async function buildResponse(messages: ChatMessage[], reply: string, source: string, sessionId?: string) {
+  const fullMessages: ChatMessage[] = [...messages, { role: "assistant", content: reply }];
+  const leadResult = sessionId ? await trySaveLead(fullMessages, sessionId) : { saved: false };
+
+  return NextResponse.json({
+    reply,
+    source,
+    leadSaved: leadResult.saved,
+    leadId: leadResult.leadId,
+    leadError: leadResult.error
+  });
+}
+
 export async function POST(req: Request) {
-  const body = await req.json().catch(() => null);
+  const body = (await req.json().catch(() => null)) as ReceptionistRequestBody | null;
   if (!body || !Array.isArray(body.messages)) {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
+  const sessionId = typeof body.sessionId === "string" ? body.sessionId : undefined;
   const provider = process.env.AI_PROVIDER?.toLowerCase() ?? "openai";
   const openaiApiKey = process.env.OPENAI_API_KEY;
   const cohereApiKey = process.env.COHERE_API_KEY;
 
-  const fallbackResponse = () => NextResponse.json({ reply: getFallbackReply(body.messages), source: "fallback" });
+  const fallbackResponse = async () => {
+    const reply = getFallbackReply(body.messages);
+    return buildResponse(body.messages, reply, "fallback", sessionId);
+  };
 
   try {
     let reply: string;
@@ -128,17 +157,18 @@ export async function POST(req: Request) {
         return fallbackResponse();
       }
       reply = await createCohereReply(body.messages, cohereApiKey);
-      return NextResponse.json({ reply, source: "cohere" });
+      return buildResponse(body.messages, reply, "cohere", sessionId);
     }
 
     if (openaiApiKey) {
       try {
         reply = await createOpenAIReply(body.messages, openaiApiKey);
-        return NextResponse.json({ reply, source: "openai" });
+        return buildResponse(body.messages, reply, "openai", sessionId);
       } catch (error) {
-        if ((error as any).code === "insufficient_quota" && cohereApiKey) {
+        const err = error as Error & { code?: string };
+        if (err.code === "insufficient_quota" && cohereApiKey) {
           const fallbackReply = await createCohereReply(body.messages, cohereApiKey);
-          return NextResponse.json({ reply: fallbackReply, source: "cohere" });
+          return buildResponse(body.messages, fallbackReply, "cohere", sessionId);
         }
         throw error;
       }
@@ -146,7 +176,7 @@ export async function POST(req: Request) {
 
     if (cohereApiKey) {
       const cohereReply = await createCohereReply(body.messages, cohereApiKey);
-      return NextResponse.json({ reply: cohereReply, source: "cohere" });
+      return buildResponse(body.messages, cohereReply, "cohere", sessionId);
     }
 
     return fallbackResponse();

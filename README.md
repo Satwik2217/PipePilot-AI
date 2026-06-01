@@ -1,45 +1,46 @@
-# PipePilot AI — Module 1 & Module 2
+# PipePilot AI — Modules 1–3
 
-This repository contains the first two modules of the PipePilot AI plumbing receptionist demo.
+PipePilot AI is an AI receptionist demo for US plumbing businesses: marketing site, chat lead capture, Supabase persistence, and a plumber dashboard.
 
 ## What is included
 
-- Next.js 15 app router setup
-- TailwindCSS styling
-- Landing page for a demo plumbing company
-- About, Services, Contact pages
-- Floating AI chat widget and receptionist UI
-- OpenAI API route for AI receptionist responses
-- Clean folder structure for future backend, Supabase, and OpenAI integration
+**Module 1 — Marketing site**
 
-## Module 2 — AI Receptionist
+- Next.js 15 App Router, React 19, TypeScript, TailwindCSS
+- Landing, About, Services, and Contact pages
+- Responsive layout with navigation and footer
 
-Module 2 introduces the AI receptionist flow and connects the contact experience to an API route:
+**Module 2 — AI receptionist**
 
+- Floating chat widget on all marketing pages
 - `components/AIReceptionist.tsx` — chat UI and conversation state
-- `components/ChatWidget.tsx` — floating widget opens the receptionist
-- `app/api/receptionist/route.ts` — OpenAI-backed route for lead collection prompts
-- `app/contact/page.tsx` — inline contact page chat experience
+- `components/ChatWidget.tsx` — floating widget wrapper
+- `app/api/receptionist/route.ts` — OpenAI (primary), Cohere (fallback), local prompts (no API key)
+
+**Module 3 — Leads & dashboard**
+
+- `supabase/migrations/001_leads.sql` — PostgreSQL schema and RLS policies
+- `lib/leads/` — extract lead fields from chat and save to Supabase
+- `lib/supabase/` — browser, server, admin, and middleware clients
+- `app/auth/login`, `app/auth/register` — plumber sign-in and registration
+- `app/dashboard` — lead table, filters, status updates, conversation viewer
+- `app/api/leads/[id]/route.ts` — authenticated status updates
+- `middleware.ts` — protects `/dashboard` routes
 
 ## Install
 
-1. Install dependencies:
-
 ```bash
 npm install
-```
-
-2. Run the app locally:
-
-```bash
 npm run dev
 ```
 
-3. Open http://localhost:3000
+Open [http://localhost:3000](http://localhost:3000).
 
 ## Environment
 
-Create a `.env.local` file at the project root and add one or more of the provider credentials below:
+Copy `.env.example` to `.env.local` at the project root.
+
+**AI providers** (optional — local fallback works without keys):
 
 ```bash
 OPENAI_API_KEY=your_openai_api_key_here
@@ -47,33 +48,101 @@ COHERE_API_KEY=your_cohere_api_key_here
 AI_PROVIDER=openai
 ```
 
-- `OPENAI_API_KEY` enables the OpenAI provider
-- `COHERE_API_KEY` enables the Cohere provider
-- `AI_PROVIDER` can be set to `openai` or `cohere`
+- `OPENAI_API_KEY` — OpenAI (`gpt-4o-mini`)
+- `COHERE_API_KEY` — Cohere (`command-a-plus-05-2026`)
+- `AI_PROVIDER` — `openai` or `cohere` (default: `openai`)
 
-If both providers are configured, OpenAI is used by default. If OpenAI returns an insufficient quota error and `COHERE_API_KEY` is available, the route will automatically retry with Cohere.
+If OpenAI returns a quota error and Cohere is configured, the API retries with Cohere automatically.
 
-Cohere offers a free tier and can be a more generous alternative for development and early testing.
-
-If no API key is configured, the receptionist route falls back to a local prompt sequence so the demo remains functional.
-
-## Testing Module 2
-
-- Visit `http://localhost:3000/contact`
-- Open the receptionist chat widget in the lower-right corner
-- Send a message and verify the AI receptionist responds
-- Confirm that `/api/receptionist` is reachable when the app is running
-
-## Commit message
-
-When committing this module, use:
+**Supabase** (required for lead persistence and dashboard):
 
 ```bash
-git commit -m "feat: add AI receptionist widget and OpenAI receptionist API route"
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 ```
 
-Future code updates should also include a short descriptive commit message and a matching README update when the project scope changes.
+- Public URL and anon key — client auth and dashboard reads (RLS)
+- Service role key — server-side lead inserts from `/api/receptionist` only; never expose in the browser
+
+Never commit `.env.local` to Git.
+
+## Supabase setup (Module 3)
+
+1. Create a project at [supabase.com](https://supabase.com)
+2. Open **SQL Editor** and run `supabase/migrations/001_leads.sql`
+3. Under **Authentication → Providers**, enable **Email** (disable email confirmation for faster local testing if you prefer)
+4. Add the three Supabase variables to `.env.local` (see above)
+
+## Testing
+
+**Module 2 — Chat**
+
+- Visit `/contact` or use the chat widget (bottom-right)
+- Send a message and confirm the AI responds
+- Without API keys, the 6-stage local prompt sequence still works
+
+**Module 3 — Leads & dashboard**
+
+1. Register at `/auth/register`, then sign in
+2. Open `/dashboard`
+3. Complete a chat on the homepage: name → phone → address → issue → emergency (or not)
+4. Confirm **Lead saved** appears in the widget
+5. Refresh the dashboard — lead should appear
+6. Change status (New, Contacted, Scheduled, Completed, Lost) and use **View** for the full conversation
+
+## Build & deploy
+
+```bash
+npm run build   # production build
+npm run start   # run production build locally
+npm run lint    # ESLint
+```
+
+Deploy to Vercel (or similar) and set the same environment variables in the project dashboard.
+
+## Project structure (key paths)
+
+```
+app/
+  api/receptionist/route.ts    # AI + lead save
+  api/leads/[id]/route.ts      # status updates
+  auth/login/                  # plumber login
+  auth/register/               # plumber signup
+  dashboard/page.tsx           # lead dashboard
+components/
+  AIReceptionist.tsx
+  ChatWidget.tsx
+  LeadDashboard.tsx
+lib/
+  leads/                       # extract + save
+  supabase/                    # Supabase clients
+  types/lead.ts
+supabase/migrations/001_leads.sql
+middleware.ts
+```
+
+## Documentation
+
+Handoff and implementation guides (optional reading):
+
+- `START_HERE.md`, `PROJECT_CONTEXT.md`, `TECHNICAL_REFERENCE.md`
+- `MODULE_3_GUIDE.md` — Module 3 details and Modules 4+ roadmap
+- `DOCUMENTATION_INDEX.md` — index of all docs
 
 ## Next step
 
-The next module will connect leads to Supabase, persist captured leads, and add a plumber dashboard for lead management.
+**Module 4** — email notifications when new leads are captured (e.g. Supabase webhook → n8n → SendGrid/Gmail).
+
+## Suggested commit messages
+
+```bash
+# Module 3 (code + docs)
+git commit -m "feat: add Supabase lead persistence and plumber dashboard"
+```
+
+For this release including handoff documentation:
+
+```bash
+git commit -m "feat: add Supabase dashboard and Module 3 handoff documentation"
+```

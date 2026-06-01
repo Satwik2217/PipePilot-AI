@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 type AssistantMessage = {
   role: "assistant" | "user";
@@ -15,11 +15,20 @@ const initialMessages: AssistantMessage[] = [
   }
 ];
 
+function createSessionId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `session-${Date.now()}`;
+}
+
 export default function AIReceptionist() {
+  const sessionId = useMemo(() => createSessionId(), []);
   const [messages, setMessages] = useState<AssistantMessage[]>(initialMessages);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [leadSaved, setLeadSaved] = useState(false);
 
   const handleSend = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -38,7 +47,7 @@ export default function AIReceptionist() {
       const response = await fetch("/api/receptionist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: nextMessages })
+        body: JSON.stringify({ messages: nextMessages, sessionId })
       });
 
       const payload = await response.json();
@@ -47,6 +56,9 @@ export default function AIReceptionist() {
       }
 
       setMessages((current) => [...current, { role: "assistant", content: payload.reply }]);
+      if (payload.leadSaved) {
+        setLeadSaved(true);
+      }
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : String(caught);
       setError(message);
@@ -67,6 +79,7 @@ export default function AIReceptionist() {
     setMessages(initialMessages);
     setInput("");
     setError(null);
+    setLeadSaved(false);
   };
 
   return (
@@ -119,7 +132,13 @@ export default function AIReceptionist() {
           {loading ? "Sending..." : "Send"}
         </button>
       </form>
-      <p className="mt-3 text-xs text-slate-500">The AI receptionist collects name, phone, address, issue, and urgency.</p>
+      {leadSaved ? (
+        <p className="mt-3 text-xs font-semibold text-green-700">
+          Lead saved. Your plumber can view it in the dashboard.
+        </p>
+      ) : (
+        <p className="mt-3 text-xs text-slate-500">The AI receptionist collects name, phone, address, issue, and urgency.</p>
+      )}
     </div>
   );
 }
