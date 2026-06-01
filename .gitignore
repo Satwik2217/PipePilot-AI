@@ -1,0 +1,17 @@
+# Dependencies (Crucial to block)
+node_modules/
+
+# Next.js Build Output (Crucial to block)
+.next/
+out/
+
+# Production/Local Secrets (Add these now to prevent future leaks)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Operating System Files
+.DS_Store
+Thumbs.db
